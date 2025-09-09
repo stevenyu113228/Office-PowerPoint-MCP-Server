@@ -19,7 +19,8 @@ from tools import (
     register_chart_tools,
     register_connector_tools,
     register_master_tools,
-    register_transition_tools
+    register_transition_tools,
+    register_notes_tools
 )
 
 # Initialize the FastMCP server
@@ -324,6 +325,13 @@ register_transition_tools(
     is_valid_rgb
 )
 
+register_notes_tools(
+    app,
+    presentations,
+    get_current_presentation_id,
+    validate_parameters
+)
+
 
 # ---- Additional Utility Tools ----
 
@@ -366,8 +374,8 @@ def get_server_info() -> Dict:
     """Get information about the MCP server."""
     return {
         "name": "PowerPoint MCP Server - Enhanced Edition",
-        "version": "2.1.0",
-        "total_tools": 32,  # Organized into 11 specialized modules
+        "version": "2.2.0",
+        "total_tools": 37,  # Organized into 12 specialized modules
         "loaded_presentations": len(presentations),
         "current_presentation": current_presentation_id,
         "features": [
@@ -376,10 +384,11 @@ def get_server_info() -> Dict:
             "Template Operations (7 tools)",
             "Structural Elements (4 tools)",
             "Professional Design (3 tools)",
+            "Notes Management (5 tools)",
             "Specialized Features (5 tools)"
         ],
         "improvements": [
-            "32 specialized tools organized into 11 focused modules",
+            "37 specialized tools organized into 12 focused modules",
             "68+ utility functions across 7 organized utility modules",
             "Enhanced parameter handling and validation",
             "Unified operation interfaces with comprehensive coverage",
@@ -393,6 +402,7 @@ def get_server_info() -> Dict:
             "Modular architecture for better maintainability"
         ],
         "new_enhanced_features": [
+            "Notes Management - Read, write, append, and clear slide notes",
             "Hyperlink Management - Add, update, remove, and list hyperlinks in text",
             "Advanced Chart Data Updates - Replace chart data with new categories and series",
             "Advanced Text Run Formatting - Apply formatting to specific text runs",
