@@ -2,7 +2,7 @@
 [![smithery badge](https://smithery.ai/badge/@GongRzhe/Office-PowerPoint-MCP-Server)](https://smithery.ai/server/@GongRzhe/Office-PowerPoint-MCP-Server)
 ![](https://badge.mcpx.dev?type=server 'MCP Server')
 
-A comprehensive MCP (Model Context Protocol) server for PowerPoint manipulation using python-pptx. **Version 2.0** provides 32 powerful tools organized into 11 specialized modules, offering complete PowerPoint creation, management, and professional design capabilities. The server features a modular architecture with enhanced parameter handling, intelligent operation selection, and comprehensive error handling.
+A comprehensive MCP (Model Context Protocol) server for PowerPoint manipulation using python-pptx. **Version 2.3** provides 55 powerful tools organized into 14 specialized modules, offering complete PowerPoint creation, management, professional design capabilities, and advanced shape positioning. The server features a modular architecture with enhanced parameter handling, intelligent operation selection, and comprehensive error handling.
 
 ----
 
@@ -46,6 +46,8 @@ A comprehensive MCP (Model Context Protocol) server for PowerPoint manipulation 
 - **Professional image effects** including shadows, reflections, glows, and soft edges
 - **Shape creation** with 20+ auto shape types (rectangles, ovals, flowchart elements, etc.)
 - **Table creation** with advanced cell formatting and styling
+- **Shape positioning** with precise control over position, size, and alignment
+- **Batch alignment** with multiple alignment types and distribution options
 
 ### Charts & Data Visualization
 - **Chart support** for column, bar, line, and pie charts
@@ -67,6 +69,9 @@ A comprehensive MCP (Model Context Protocol) server for PowerPoint manipulation 
 - **Comprehensive validation** with automatic error fixing
 - **Template search** with configurable directory paths
 - **Professional layout calculations** with margin and spacing management
+- **Shape positioning system** with EMU/inch conversion and coordinate management
+- **Layout analysis** with overlap detection and alignment suggestions
+- **Batch operations** for multiple shape manipulation and distribution
 
 ## Installation
 

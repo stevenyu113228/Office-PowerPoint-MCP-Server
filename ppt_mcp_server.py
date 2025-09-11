@@ -20,7 +20,9 @@ from tools import (
     register_connector_tools,
     register_master_tools,
     register_transition_tools,
-    register_notes_tools
+    register_notes_tools,
+    register_shape_positioning_tools,
+    register_shape_alignment_tools
 )
 
 # Initialize the FastMCP server
@@ -332,6 +334,28 @@ register_notes_tools(
     validate_parameters
 )
 
+register_shape_positioning_tools(
+    app,
+    presentations,
+    get_current_presentation_id,
+    validate_parameters,
+    is_positive,
+    is_non_negative,
+    is_in_range,
+    is_valid_rgb
+)
+
+register_shape_alignment_tools(
+    app,
+    presentations,
+    get_current_presentation_id,
+    validate_parameters,
+    is_positive,
+    is_non_negative,
+    is_in_range,
+    is_valid_rgb
+)
+
 
 # ---- Additional Utility Tools ----
 
@@ -373,9 +397,9 @@ def switch_presentation(presentation_id: str) -> Dict:
 def get_server_info() -> Dict:
     """Get information about the MCP server."""
     return {
-        "name": "PowerPoint MCP Server - Enhanced Edition",
-        "version": "2.2.0",
-        "total_tools": 37,  # Organized into 12 specialized modules
+        "name": "PowerPoint MCP Server - Enhanced Edition with Shape Positioning",
+        "version": "2.3.0",
+        "total_tools": 55,  # Organized into 14 specialized modules
         "loaded_presentations": len(presentations),
         "current_presentation": current_presentation_id,
         "features": [
@@ -385,10 +409,12 @@ def get_server_info() -> Dict:
             "Structural Elements (4 tools)",
             "Professional Design (3 tools)",
             "Notes Management (5 tools)",
+            "Shape Positioning (9 tools)",
+            "Shape Alignment (9 tools)",
             "Specialized Features (5 tools)"
         ],
         "improvements": [
-            "37 specialized tools organized into 12 focused modules",
+            "55 specialized tools organized into 14 focused modules",
             "68+ utility functions across 7 organized utility modules",
             "Enhanced parameter handling and validation",
             "Unified operation interfaces with comprehensive coverage",
@@ -399,6 +425,8 @@ def get_server_info() -> Dict:
             "Advanced visual effects and styling",
             "Content-aware optimization and validation",
             "Complete PowerPoint lifecycle management",
+            "Comprehensive shape positioning and alignment system",
+            "Layout analysis and optimization tools",
             "Modular architecture for better maintainability"
         ],
         "new_enhanced_features": [
@@ -408,7 +436,13 @@ def get_server_info() -> Dict:
             "Advanced Text Run Formatting - Apply formatting to specific text runs",
             "Shape Connectors - Add connector lines and arrows between points",
             "Slide Master Management - Access and manage slide masters and layouts",
-            "Slide Transitions - Basic transition management (placeholder for future)"
+            "Slide Transitions - Basic transition management (placeholder for future)",
+            "Shape Positioning - Update position, size, and move shapes with precision",
+            "Shape Alignment - Align multiple shapes with various alignment types",
+            "Layout Analysis - Detect overlaps, suggest improvements, get metrics",
+            "Coordinate System - Convert between EMU and inches, get slide dimensions",
+            "Shape Queries - Find shapes by type, name pattern, or overlapping regions",
+            "Batch Operations - Distribute shapes evenly, align groups of elements"
         ]
     }
 

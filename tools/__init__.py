@@ -14,6 +14,8 @@ from .connector_tools import register_connector_tools
 from .master_tools import register_master_tools
 from .transition_tools import register_transition_tools
 from .notes_tools import register_notes_tools
+from .shape_positioning_tools import register_shape_positioning_tools
+from .shape_alignment_tools import register_shape_alignment_tools
 
 __all__ = [
     "register_presentation_tools",
@@ -26,5 +28,7 @@ __all__ = [
     "register_connector_tools",
     "register_master_tools",
     "register_transition_tools",
-    "register_notes_tools"
+    "register_notes_tools",
+    "register_shape_positioning_tools",
+    "register_shape_alignment_tools"
 ]
