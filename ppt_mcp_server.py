@@ -22,7 +22,8 @@ from tools import (
     register_transition_tools,
     register_notes_tools,
     register_shape_positioning_tools,
-    register_shape_alignment_tools
+    register_shape_alignment_tools,
+    register_slide_management_tools
 )
 
 # Initialize the FastMCP server
@@ -354,6 +355,12 @@ register_shape_alignment_tools(
     is_non_negative,
     is_in_range,
     is_valid_rgb
+)
+
+register_slide_management_tools(
+    app,
+    presentations,
+    get_current_presentation_id
 )
 
 

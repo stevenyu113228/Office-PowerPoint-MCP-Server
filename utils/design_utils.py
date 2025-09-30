@@ -687,3 +687,249 @@ def get_font_recommendations(font_path: str, presentation_type: str = 'business'
             "error": str(e),
             "recommendations": None
         }
+
+
+# Format Copying Functions
+
+def copy_slide_background(source_slide, target_slide) -> Dict:
+    """
+    Copy background formatting from source slide to target slide.
+
+    Args:
+        source_slide: Source slide to copy from
+        target_slide: Target slide to apply formatting to
+
+    Returns:
+        Dictionary with operation results
+    """
+    try:
+        # Copy background if it exists
+        if hasattr(source_slide, 'background') and source_slide.background:
+            try:
+                # Copy fill properties
+                if hasattr(source_slide.background, 'fill'):
+                    source_fill = source_slide.background.fill
+                    target_fill = target_slide.background.fill
+
+                    if source_fill.type:
+                        target_fill.type = source_fill.type
+            except:
+                pass  # Background copying may not work for all slide types
+
+        return {
+            "success": True,
+            "message": "Background copied"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to copy background: {str(e)}"
+        }
+
+
+def copy_text_formatting(source_shape, target_shape) -> Dict:
+    """
+    Copy text formatting from source shape to target shape.
+
+    Args:
+        source_shape: Source shape to copy formatting from
+        target_shape: Target shape to apply formatting to
+
+    Returns:
+        Dictionary with operation results
+    """
+    try:
+        if not hasattr(source_shape, 'text_frame') or not hasattr(target_shape, 'text_frame'):
+            return {
+                "success": False,
+                "error": "One or both shapes do not have text frames"
+            }
+
+        source_tf = source_shape.text_frame
+        target_tf = target_shape.text_frame
+
+        # Copy text frame properties
+        target_tf.word_wrap = source_tf.word_wrap
+
+        # Copy paragraph formatting to all paragraphs
+        for target_para in target_tf.paragraphs:
+            if source_tf.paragraphs:
+                source_para = source_tf.paragraphs[0]
+
+                # Copy paragraph properties
+                target_para.alignment = source_para.alignment
+                target_para.level = source_para.level
+
+                # Copy font formatting from first run if available
+                if source_para.runs and target_para.runs:
+                    source_run = source_para.runs[0]
+
+                    for target_run in target_para.runs:
+                        target_run.font.bold = source_run.font.bold
+                        target_run.font.italic = source_run.font.italic
+                        target_run.font.underline = source_run.font.underline
+
+                        if source_run.font.size:
+                            target_run.font.size = source_run.font.size
+                        if source_run.font.name:
+                            target_run.font.name = source_run.font.name
+                        if source_run.font.color.type:
+                            try:
+                                target_run.font.color.rgb = source_run.font.color.rgb
+                            except:
+                                pass
+
+        return {
+            "success": True,
+            "message": "Text formatting copied"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to copy text formatting: {str(e)}"
+        }
+
+
+def copy_slide_format(presentation: Presentation, source_slide_index: int,
+                     target_slide_indices: List[int], copy_background: bool = True,
+                     copy_font_styles: bool = True) -> Dict:
+    """
+    Copy formatting from source slide to multiple target slides.
+
+    Args:
+        presentation: Presentation object
+        source_slide_index: Index of source slide
+        target_slide_indices: List of target slide indices
+        copy_background: Whether to copy background
+        copy_font_styles: Whether to copy font styles
+
+    Returns:
+        Dictionary with operation results
+    """
+    try:
+        total_slides = len(presentation.slides)
+
+        # Validate indices
+        if source_slide_index < 0 or source_slide_index >= total_slides:
+            raise ValueError(f"Invalid source index: {source_slide_index}")
+
+        for idx in target_slide_indices:
+            if idx < 0 or idx >= total_slides:
+                raise ValueError(f"Invalid target index: {idx}")
+
+        source_slide = presentation.slides[source_slide_index]
+        slides_formatted = 0
+        errors = []
+
+        for target_index in target_slide_indices:
+            if target_index == source_slide_index:
+                continue  # Skip source slide
+
+            target_slide = presentation.slides[target_index]
+
+            try:
+                # Copy background
+                if copy_background:
+                    copy_slide_background(source_slide, target_slide)
+
+                # Copy font styles
+                if copy_font_styles:
+                    # Match shapes by index and copy formatting
+                    for i, source_shape in enumerate(source_slide.shapes):
+                        if i < len(target_slide.shapes):
+                            target_shape = target_slide.shapes[i]
+                            copy_text_formatting(source_shape, target_shape)
+
+                slides_formatted += 1
+            except Exception as e:
+                errors.append(f"Slide {target_index}: {str(e)}")
+
+        return {
+            "success": True,
+            "source_slide_index": source_slide_index,
+            "slides_formatted": slides_formatted,
+            "total_targets": len(target_slide_indices),
+            "errors": errors if errors else None
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to copy slide format: {str(e)}"
+        }
+
+
+def apply_text_style_to_all(presentation: Presentation,
+                            font_name: Optional[str] = None,
+                            font_size: Optional[int] = None,
+                            font_color: Optional[Tuple[int, int, int]] = None,
+                            bold: Optional[bool] = None,
+                            italic: Optional[bool] = None,
+                            apply_to: str = "body") -> Dict:
+    """
+    Apply consistent text styling to all slides in presentation.
+
+    Args:
+        presentation: Presentation object
+        font_name: Font name to apply
+        font_size: Font size in points
+        font_color: RGB color tuple
+        bold: Whether to make text bold
+        italic: Whether to make text italic
+        apply_to: Where to apply ("title", "body", "all")
+
+    Returns:
+        Dictionary with operation results
+    """
+    try:
+        slides_modified = 0
+        shapes_modified = 0
+
+        for slide in presentation.slides:
+            slide_modified = False
+
+            for shape in slide.shapes:
+                # Determine if we should modify this shape
+                should_modify = False
+
+                if apply_to == "all":
+                    should_modify = True
+                elif apply_to == "title" and hasattr(slide.shapes, 'title') and shape == slide.shapes.title:
+                    should_modify = True
+                elif apply_to == "body" and hasattr(shape, 'text_frame'):
+                    # Apply to body text (not title)
+                    if not (hasattr(slide.shapes, 'title') and shape == slide.shapes.title):
+                        should_modify = True
+
+                if should_modify and hasattr(shape, 'text_frame') and shape.text_frame:
+                    for paragraph in shape.text_frame.paragraphs:
+                        for run in paragraph.runs:
+                            # Apply font properties
+                            if font_name is not None:
+                                run.font.name = font_name
+                            if font_size is not None:
+                                run.font.size = Pt(font_size)
+                            if font_color is not None:
+                                run.font.color.rgb = RGBColor(*font_color)
+                            if bold is not None:
+                                run.font.bold = bold
+                            if italic is not None:
+                                run.font.italic = italic
+
+                    shapes_modified += 1
+                    slide_modified = True
+
+            if slide_modified:
+                slides_modified += 1
+
+        return {
+            "success": True,
+            "slides_modified": slides_modified,
+            "shapes_modified": shapes_modified,
+            "total_slides": len(presentation.slides),
+            "apply_to": apply_to
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to apply text style: {str(e)}"
+        }

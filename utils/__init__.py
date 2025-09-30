@@ -16,13 +16,19 @@ __all__ = [
     
     # Presentation utilities
     "create_presentation",
-    "open_presentation", 
+    "open_presentation",
     "save_presentation",
     "create_presentation_from_template",
     "get_presentation_info",
     "get_template_info",
     "set_core_properties",
     "get_core_properties",
+    "move_slide",
+    "swap_slides",
+    "reorder_slides",
+    "delete_slide",
+    "delete_slides",
+    "duplicate_slide",
     
     # Content utilities
     "add_slide",
@@ -38,10 +44,15 @@ __all__ = [
     "format_table_cell",
     "add_chart",
     "format_chart",
+    "get_shape_info",
+    "find_shapes_by_type",
+    "get_all_textboxes",
+    "format_keywords_in_text",
+    "extract_slide_text_content",
     
     # Design utilities
     "get_professional_color",
-    "get_professional_font", 
+    "get_professional_font",
     "get_color_schemes",
     "add_professional_slide",
     "apply_professional_theme",
@@ -62,6 +73,8 @@ __all__ = [
     "analyze_font_file",
     "optimize_font_for_presentation",
     "get_font_recommendations",
+    "copy_slide_format",
+    "apply_text_style_to_all",
     
     # Validation utilities
     "validate_text_fit",

@@ -233,31 +233,72 @@ def register_content_tools(app: FastMCP, presentations: Dict, get_current_presen
     def add_bullet_points(
         slide_index: int,
         placeholder_idx: int,
-        bullet_points: List[str],
+        bullet_points: List[Union[str, Dict[str, Any]]],
+        levels: Optional[List[int]] = None,
         presentation_id: Optional[str] = None
     ) -> Dict:
-        """Add bullet points to a placeholder."""
+        """
+        Add bullet points to a placeholder with optional multi-level indentation.
+
+        Supports three formats:
+        1. Simple strings (backward compatible): ["Point 1", "Point 2"]
+        2. Dict format with levels: [{"text": "Main", "level": 0}, {"text": "Sub", "level": 1}]
+        3. Strings with separate levels parameter: bullet_points=["Main", "Sub"], levels=[0, 1]
+
+        Args:
+            slide_index: Index of the slide (0-based)
+            placeholder_idx: Index of the placeholder
+            bullet_points: List of strings or dicts with "text" and "level" keys
+            levels: Optional list of indentation levels (0-8) for each bullet point
+            presentation_id: Optional presentation ID
+
+        Level range: 0-8 (0=main level, 1=first indent, 2=second indent, etc.)
+
+        Example:
+            # Simple usage (backward compatible)
+            add_bullet_points(slide_index=1, placeholder_idx=1,
+                            bullet_points=["Point 1", "Point 2"])
+
+            # With multi-level indentation (dict format)
+            add_bullet_points(slide_index=1, placeholder_idx=1,
+                            bullet_points=[
+                                "Main Topic",
+                                {"text": "Subtopic A", "level": 1},
+                                {"text": "Detail A1", "level": 2},
+                                {"text": "Subtopic B", "level": 1}
+                            ])
+
+            # With multi-level indentation (levels parameter)
+            add_bullet_points(slide_index=1, placeholder_idx=1,
+                            bullet_points=["Main", "Sub A", "Sub B"],
+                            levels=[0, 1, 1])
+        """
         pres_id = presentation_id if presentation_id is not None else get_current_presentation_id()
-        
+
         if pres_id is None or pres_id not in presentations:
             return {
                 "error": "No presentation is currently loaded or the specified ID is invalid"
             }
-        
+
         pres = presentations[pres_id]
-        
+
         if slide_index < 0 or slide_index >= len(pres.slides):
             return {
                 "error": f"Invalid slide index: {slide_index}. Available slides: 0-{len(pres.slides) - 1}"
             }
-        
+
         slide = pres.slides[slide_index]
-        
+
         try:
             placeholder = slide.placeholders[placeholder_idx]
-            ppt_utils.add_bullet_points(placeholder, bullet_points)
+            result = ppt_utils.add_bullet_points(placeholder, bullet_points, levels)
+
             return {
-                "message": f"Added {len(bullet_points)} bullet points to placeholder {placeholder_idx} on slide {slide_index}"
+                "message": f"Added {result['total_points']} bullet points to placeholder {placeholder_idx} on slide {slide_index}",
+                "total_points": result['total_points'],
+                "levels_used": result['levels_used'],
+                "slide_index": slide_index,
+                "placeholder_idx": placeholder_idx
             }
         except Exception as e:
             return {
@@ -292,7 +333,24 @@ def register_content_tools(app: FastMCP, presentations: Dict, get_current_presen
         max_font_size: int = 72,
         presentation_id: Optional[str] = None
     ) -> Dict:
-        """Unified text management tool for adding, formatting, validating text, and formatting multiple text runs."""
+        """
+        Unified text management tool for adding, formatting, validating text, and formatting multiple text runs.
+
+        Operations:
+        - "add": Add a new text box
+        - "format": Format existing text shape
+        - "validate": Validate text fit with optional auto-fix
+        - "format_runs": Format multiple text runs with different formatting and indentation levels
+
+        For "format_runs" operation, text_runs supports multi-level indentation:
+        text_runs = [
+            {"text": "Main Point", "level": 0, "bold": True, "font_size": 18},
+            {"text": "Sub-point A", "level": 1, "font_size": 16},
+            {"text": "Detail A1", "level": 2, "italic": True, "font_size": 14}
+        ]
+
+        Level range: 0-8 (0=main level, 1=first indent, 2=second indent, etc.)
+        """
         pres_id = presentation_id if presentation_id is not None else get_current_presentation_id()
         
         if pres_id is None or pres_id not in presentations:
@@ -395,70 +453,86 @@ def register_content_tools(app: FastMCP, presentations: Dict, get_current_presen
                 return validation_result
             
             elif operation == "format_runs":
-                # Format multiple text runs with different formatting
+                # Format multiple text runs with different formatting, including multi-level indentation
                 if shape_index is None or shape_index < 0 or shape_index >= len(slide.shapes):
                     return {
                         "error": f"Invalid shape index for format_runs: {shape_index}. Available shapes: 0-{len(slide.shapes) - 1}"
                     }
-                
+
                 if not text_runs:
                     return {"error": "text_runs parameter is required for format_runs operation"}
-                
+
                 shape = slide.shapes[shape_index]
-                
+
                 # Check if shape has text
                 if not hasattr(shape, 'text_frame') or not shape.text_frame:
                     return {"error": "Shape does not contain text"}
-                
+
                 # Clear existing text and rebuild with formatted runs
                 text_frame = shape.text_frame
                 text_frame.clear()
-                
+
                 formatted_runs = []
-                
-                for run_data in text_runs:
+                levels_used = set()
+
+                for i, run_data in enumerate(text_runs):
                     if 'text' not in run_data:
                         continue
-                        
+
+                    # Get indentation level (0-8)
+                    level = run_data.get('level', 0)
+                    level = max(0, min(8, level))  # Ensure valid range
+                    levels_used.add(level)
+
                     # Add paragraph if needed
-                    if not text_frame.paragraphs:
+                    if i == 0 and text_frame.paragraphs:
                         paragraph = text_frame.paragraphs[0]
+                        paragraph.text = run_data['text']
                     else:
                         paragraph = text_frame.add_paragraph()
-                    
-                    # Add run with text
-                    run = paragraph.add_run()
-                    run.text = run_data['text']
-                    
-                    # Apply formatting using pptx imports
+                        paragraph.text = run_data['text']
+
+                    # Set indentation level
+                    paragraph.level = level
+
+                    # Apply formatting to the paragraph's runs
                     from pptx.util import Pt
                     from pptx.dml.color import RGBColor
-                    
-                    if 'bold' in run_data:
-                        run.font.bold = run_data['bold']
-                    if 'italic' in run_data:
-                        run.font.italic = run_data['italic']
-                    if 'underline' in run_data:
-                        run.font.underline = run_data['underline']
-                    if 'font_size' in run_data:
-                        run.font.size = Pt(run_data['font_size'])
-                    if 'font_name' in run_data:
-                        run.font.name = run_data['font_name']
-                    if 'color' in run_data and is_valid_rgb(run_data['color']):
-                        run.font.color.rgb = RGBColor(*run_data['color'])
-                    if 'hyperlink' in run_data:
-                        run.hyperlink.address = run_data['hyperlink']
-                    
+
+                    for run in paragraph.runs:
+                        if 'bold' in run_data:
+                            run.font.bold = run_data['bold']
+                        if 'italic' in run_data:
+                            run.font.italic = run_data['italic']
+                        if 'underline' in run_data:
+                            run.font.underline = run_data['underline']
+                        if 'font_size' in run_data:
+                            run.font.size = Pt(run_data['font_size'])
+                        elif level == 0:
+                            run.font.size = Pt(18)
+                        elif level == 1:
+                            run.font.size = Pt(16)
+                        elif level >= 2:
+                            run.font.size = Pt(14)
+                        if 'font_name' in run_data:
+                            run.font.name = run_data['font_name']
+                        if 'color' in run_data and is_valid_rgb(run_data['color']):
+                            run.font.color.rgb = RGBColor(*run_data['color'])
+                        if 'hyperlink' in run_data:
+                            run.hyperlink.address = run_data['hyperlink']
+
                     formatted_runs.append({
                         "text": run_data['text'],
-                        "formatting_applied": {k: v for k, v in run_data.items() if k != 'text'}
+                        "level": level,
+                        "formatting_applied": {k: v for k, v in run_data.items() if k not in ['text', 'level']}
                     })
-                
+
                 return {
                     "message": f"Applied formatting to {len(formatted_runs)} text runs on shape {shape_index}",
                     "slide_index": slide_index,
                     "shape_index": shape_index,
-                    "formatted_runs": formatted_runs
+                    "formatted_runs": formatted_runs,
+                    "levels_used": sorted(list(levels_used))
                 }
             
             else:
@@ -590,4 +664,228 @@ def register_content_tools(app: FastMCP, presentations: Dict, get_current_presen
         except Exception as e:
             return {
                 "error": f"Failed to {operation} image: {str(e)}"
+            }
+
+    @app.tool()
+    def format_keywords(
+        slide_index: int,
+        shape_index: int,
+        keywords: List[str],
+        bold: Optional[bool] = None,
+        italic: Optional[bool] = None,
+        underline: Optional[bool] = None,
+        font_size: Optional[int] = None,
+        font_color: Optional[List[int]] = None,
+        case_sensitive: bool = False,
+        presentation_id: Optional[str] = None
+    ) -> Dict:
+        """
+        Format specific keywords in a text shape with different styling.
+
+        This tool finds all occurrences of specified keywords in a text shape
+        and applies formatting (bold, italic, underline, color, size) to them.
+
+        Args:
+            slide_index: Index of the slide
+            shape_index: Index of the shape containing text
+            keywords: List of keywords to format (e.g., ["Python", "API"])
+            bold: Whether to make keywords bold
+            italic: Whether to make keywords italic
+            underline: Whether to underline keywords
+            font_size: Font size for keywords in points
+            font_color: RGB color for keywords as [R, G, B]
+            case_sensitive: Whether search is case-sensitive
+            presentation_id: Optional presentation ID
+
+        Returns:
+            Dictionary with formatting results including count of formatted keywords
+
+        Example:
+            # Make all occurrences of "Important" bold and red
+            format_keywords(
+                slide_index=1,
+                shape_index=2,
+                keywords=["Important", "Critical"],
+                bold=True,
+                font_color=[255, 0, 0]
+            )
+
+            # Make "Python" and "JavaScript" bold and larger
+            format_keywords(
+                slide_index=0,
+                shape_index=1,
+                keywords=["Python", "JavaScript"],
+                bold=True,
+                font_size=16
+            )
+        """
+        pres_id = presentation_id if presentation_id is not None else get_current_presentation_id()
+
+        if pres_id is None or pres_id not in presentations:
+            return {
+                "error": "No presentation is currently loaded or the specified ID is invalid"
+            }
+
+        pres = presentations[pres_id]
+
+        if slide_index < 0 or slide_index >= len(pres.slides):
+            return {
+                "error": f"Invalid slide index: {slide_index}. Available slides: 0-{len(pres.slides) - 1}"
+            }
+
+        slide = pres.slides[slide_index]
+
+        if shape_index < 0 or shape_index >= len(slide.shapes):
+            return {
+                "error": f"Invalid shape index: {shape_index}. Available shapes: 0-{len(slide.shapes) - 1}"
+            }
+
+        shape = slide.shapes[shape_index]
+
+        try:
+            # Convert font_color list to tuple if provided
+            font_color_tuple = tuple(font_color) if font_color else None
+
+            result = ppt_utils.format_keywords_in_text(
+                shape,
+                keywords,
+                bold=bold,
+                italic=italic,
+                underline=underline,
+                font_size=font_size,
+                font_color=font_color_tuple,
+                case_sensitive=case_sensitive
+            )
+
+            result["slide_index"] = slide_index
+            result["shape_index"] = shape_index
+            return result
+
+        except Exception as e:
+            return {
+                "error": f"Failed to format keywords: {str(e)}"
+            }
+
+    @app.tool()
+    def get_shape_info(
+        slide_index: int,
+        shape_index: int,
+        presentation_id: Optional[str] = None
+    ) -> Dict:
+        """
+        Get detailed information about a specific shape.
+
+        Args:
+            slide_index: Index of the slide
+            shape_index: Index of the shape
+            presentation_id: Optional presentation ID
+
+        Returns:
+            Detailed shape information including position, type, and content
+        """
+        pres_id = presentation_id if presentation_id is not None else get_current_presentation_id()
+
+        if pres_id is None or pres_id not in presentations:
+            return {
+                "error": "No presentation is currently loaded or the specified ID is invalid"
+            }
+
+        pres = presentations[pres_id]
+
+        if slide_index < 0 or slide_index >= len(pres.slides):
+            return {
+                "error": f"Invalid slide index: {slide_index}. Available slides: 0-{len(pres.slides) - 1}"
+            }
+
+        slide = pres.slides[slide_index]
+
+        try:
+            result = ppt_utils.get_shape_info(slide, shape_index)
+            result["slide_index"] = slide_index
+            return result
+        except Exception as e:
+            return {
+                "error": f"Failed to get shape info: {str(e)}"
+            }
+
+    @app.tool()
+    def find_shapes_by_type(
+        slide_index: int,
+        shape_type: str,
+        presentation_id: Optional[str] = None
+    ) -> Dict:
+        """
+        Find all shapes of a specific type on a slide.
+
+        Args:
+            slide_index: Index of the slide
+            shape_type: Type of shape (e.g., "TEXT_BOX", "PICTURE", "TABLE", "CHART")
+            presentation_id: Optional presentation ID
+
+        Returns:
+            List of matching shapes with their details
+        """
+        pres_id = presentation_id if presentation_id is not None else get_current_presentation_id()
+
+        if pres_id is None or pres_id not in presentations:
+            return {
+                "error": "No presentation is currently loaded or the specified ID is invalid"
+            }
+
+        pres = presentations[pres_id]
+
+        if slide_index < 0 or slide_index >= len(pres.slides):
+            return {
+                "error": f"Invalid slide index: {slide_index}. Available slides: 0-{len(pres.slides) - 1}"
+            }
+
+        slide = pres.slides[slide_index]
+
+        try:
+            result = ppt_utils.find_shapes_by_type(slide, shape_type)
+            result["slide_index"] = slide_index
+            return result
+        except Exception as e:
+            return {
+                "error": f"Failed to find shapes: {str(e)}"
+            }
+
+    @app.tool()
+    def get_all_textboxes(
+        slide_index: int,
+        presentation_id: Optional[str] = None
+    ) -> Dict:
+        """
+        Get all text boxes from a slide.
+
+        Args:
+            slide_index: Index of the slide
+            presentation_id: Optional presentation ID
+
+        Returns:
+            List of all text boxes with their content and positions
+        """
+        pres_id = presentation_id if presentation_id is not None else get_current_presentation_id()
+
+        if pres_id is None or pres_id not in presentations:
+            return {
+                "error": "No presentation is currently loaded or the specified ID is invalid"
+            }
+
+        pres = presentations[pres_id]
+
+        if slide_index < 0 or slide_index >= len(pres.slides):
+            return {
+                "error": f"Invalid slide index: {slide_index}. Available slides: 0-{len(pres.slides) - 1}"
+            }
+
+        slide = pres.slides[slide_index]
+
+        try:
+            result = ppt_utils.get_all_textboxes(slide)
+            result["slide_index"] = slide_index
+            return result
+        except Exception as e:
+            return {
+                "error": f"Failed to get textboxes: {str(e)}"
             }

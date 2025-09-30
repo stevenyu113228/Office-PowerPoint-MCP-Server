@@ -16,10 +16,11 @@ from .transition_tools import register_transition_tools
 from .notes_tools import register_notes_tools
 from .shape_positioning_tools import register_shape_positioning_tools
 from .shape_alignment_tools import register_shape_alignment_tools
+from .slide_management_tools import register_slide_management_tools
 
 __all__ = [
     "register_presentation_tools",
-    "register_content_tools", 
+    "register_content_tools",
     "register_structural_tools",
     "register_professional_tools",
     "register_template_tools",
@@ -30,5 +31,6 @@ __all__ = [
     "register_transition_tools",
     "register_notes_tools",
     "register_shape_positioning_tools",
-    "register_shape_alignment_tools"
+    "register_shape_alignment_tools",
+    "register_slide_management_tools"
 ]

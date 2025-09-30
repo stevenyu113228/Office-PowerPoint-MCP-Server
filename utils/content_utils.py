@@ -101,21 +101,82 @@ def populate_placeholder(slide, placeholder_idx: int, text: str) -> None:
     placeholder.text = text
 
 
-def add_bullet_points(placeholder, bullet_points: List[str]) -> None:
+def add_bullet_points(placeholder, bullet_points: List[Any], levels: Optional[List[int]] = None) -> Dict:
     """
-    Add bullet points to a placeholder.
-    
+    Add bullet points to a placeholder with optional multi-level indentation.
+
+    Supports both simple strings and dict format with indentation levels:
+    - Simple format: List of strings (all level 0, backward compatible)
+    - Advanced format: List of strings or dicts with "text" and "level" keys
+    - Separate levels: List of strings with separate levels parameter
+
     Args:
         placeholder: The placeholder object
-        bullet_points: List of bullet point texts
+        bullet_points: List of bullet point texts or dicts with {"text": str, "level": int}
+        levels: Optional list of indentation levels (0-8) if bullet_points is List[str]
+
+    Returns:
+        Dict with operation results including levels used
+
+    Example:
+        # Simple usage (backward compatible)
+        add_bullet_points(placeholder, ["Point 1", "Point 2"])
+
+        # With indentation using dict format
+        add_bullet_points(placeholder, [
+            "Main Point",
+            {"text": "Sub-point", "level": 1},
+            {"text": "Sub-sub-point", "level": 2}
+        ])
+
+        # With indentation using separate levels parameter
+        add_bullet_points(placeholder, ["Point 1", "Sub 1", "Sub 2"], levels=[0, 1, 1])
     """
     text_frame = placeholder.text_frame
     text_frame.clear()
-    
+
+    levels_used = set()
+
     for i, point in enumerate(bullet_points):
-        p = text_frame.add_paragraph()
-        p.text = point
-        p.level = 0
+        # Determine text and level
+        if isinstance(point, dict):
+            text = point.get("text", "")
+            level = point.get("level", 0)
+        else:
+            text = point
+            level = levels[i] if levels and i < len(levels) else 0
+
+        # Ensure level is within valid range (0-8 per PowerPoint specification)
+        level = max(0, min(8, level))
+        levels_used.add(level)
+
+        # Add paragraph
+        if i == 0:
+            text_frame.text = text
+            p = text_frame.paragraphs[0]
+        else:
+            p = text_frame.add_paragraph()
+            p.text = text
+
+        # Set indentation level (core feature)
+        p.level = level
+
+        # Optional: Adjust font size based on level for better visual hierarchy
+        if level == 0:
+            if p.runs:
+                p.runs[0].font.size = Pt(18)
+        elif level == 1:
+            if p.runs:
+                p.runs[0].font.size = Pt(16)
+        elif level >= 2:
+            if p.runs:
+                p.runs[0].font.size = Pt(14)
+
+    return {
+        "success": True,
+        "total_points": len(bullet_points),
+        "levels_used": sorted(list(levels_used))
+    }
 
 
 def add_textbox(slide, left: float, top: float, width: float, height: float, text: str,
@@ -471,6 +532,302 @@ def format_chart(chart, has_legend: bool = True, legend_position: str = 'right',
             
     except Exception:
         pass  # Graceful degradation for chart formatting
+
+
+def format_keywords_in_text(shape, keywords: List[str],
+                           bold: Optional[bool] = None,
+                           italic: Optional[bool] = None,
+                           underline: Optional[bool] = None,
+                           font_size: Optional[int] = None,
+                           font_color: Optional[Tuple[int, int, int]] = None,
+                           case_sensitive: bool = False) -> Dict:
+    """
+    Format specific keywords in a text shape with different styling.
+
+    Args:
+        shape: The shape object containing text
+        keywords: List of keywords to format
+        bold: Whether to make keywords bold
+        italic: Whether to make keywords italic
+        underline: Whether to underline keywords
+        font_size: Font size for keywords in points
+        font_color: RGB color tuple for keywords
+        case_sensitive: Whether search is case-sensitive
+
+    Returns:
+        Dictionary with operation results
+    """
+    try:
+        if not hasattr(shape, 'text_frame') or not shape.text_frame:
+            return {
+                "success": False,
+                "error": "Shape does not have a text frame"
+            }
+
+        text_frame = shape.text_frame
+        total_formatted = 0
+        keywords_found = {}
+
+        # Process each paragraph
+        for paragraph in text_frame.paragraphs:
+            # Get full paragraph text
+            para_text = paragraph.text
+
+            # Find keyword positions in paragraph
+            for keyword in keywords:
+                keyword_count = 0
+                search_text = para_text if case_sensitive else para_text.lower()
+                search_keyword = keyword if case_sensitive else keyword.lower()
+
+                # Find all occurrences
+                start = 0
+                positions = []
+                while True:
+                    pos = search_text.find(search_keyword, start)
+                    if pos == -1:
+                        break
+                    positions.append((pos, pos + len(keyword)))
+                    start = pos + 1
+                    keyword_count += 1
+
+                if keyword_count > 0:
+                    keywords_found[keyword] = keyword_count
+                    total_formatted += keyword_count
+
+                # Apply formatting to found keywords
+                if positions:
+                    # Need to rebuild paragraph with runs
+                    _apply_formatting_to_positions(paragraph, positions, para_text,
+                                                  bold, italic, underline,
+                                                  font_size, font_color)
+
+        return {
+            "success": True,
+            "total_keywords_formatted": total_formatted,
+            "keywords_found": keywords_found,
+            "message": f"Formatted {total_formatted} keyword occurrences"
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to format keywords: {str(e)}"
+        }
+
+
+def _apply_formatting_to_positions(paragraph, positions, original_text,
+                                   bold, italic, underline, font_size, font_color):
+    """
+    Helper function to apply formatting to specific positions in a paragraph.
+    """
+    from pptx.util import Pt
+    from pptx.dml.color import RGBColor
+
+    # Clear existing runs
+    for _ in range(len(paragraph.runs)):
+        paragraph._p.remove(paragraph.runs[0]._r)
+
+    # Sort positions
+    positions = sorted(positions)
+
+    # Build new runs with formatting
+    last_end = 0
+    for start, end in positions:
+        # Add unformatted text before keyword
+        if start > last_end:
+            run = paragraph.add_run()
+            run.text = original_text[last_end:start]
+
+        # Add formatted keyword
+        run = paragraph.add_run()
+        run.text = original_text[start:end]
+
+        # Apply formatting
+        if bold is not None:
+            run.font.bold = bold
+        if italic is not None:
+            run.font.italic = italic
+        if underline is not None:
+            run.font.underline = underline
+        if font_size is not None:
+            run.font.size = Pt(font_size)
+        if font_color is not None:
+            run.font.color.rgb = RGBColor(*font_color)
+
+        last_end = end
+
+    # Add remaining unformatted text
+    if last_end < len(original_text):
+        run = paragraph.add_run()
+        run.text = original_text[last_end:]
+
+
+def get_shape_info(slide, shape_index: int) -> Dict:
+    """
+    Get detailed information about a specific shape.
+
+    Args:
+        slide: The slide object
+        shape_index: Index of the shape
+
+    Returns:
+        Dictionary with detailed shape information
+    """
+    try:
+        if shape_index < 0 or shape_index >= len(slide.shapes):
+            raise ValueError(f"Invalid shape index: {shape_index}. Available shapes: 0-{len(slide.shapes) - 1}")
+
+        shape = slide.shapes[shape_index]
+
+        info = {
+            "shape_index": shape_index,
+            "name": shape.name,
+            "type": str(shape.shape_type),
+            "position": {
+                "left": shape.left,
+                "top": shape.top,
+                "width": shape.width,
+                "height": shape.height,
+                "left_inches": shape.left / 914400,
+                "top_inches": shape.top / 914400,
+                "width_inches": shape.width / 914400,
+                "height_inches": shape.height / 914400
+            },
+            "has_text": hasattr(shape, 'text_frame') and shape.text_frame is not None,
+            "is_placeholder": hasattr(shape, 'placeholder_format')
+        }
+
+        # Add text information if available
+        if info["has_text"]:
+            text = shape.text_frame.text
+            info["text_length"] = len(text)
+            info["text_preview"] = text[:100] + "..." if len(text) > 100 else text
+
+            # Get font information from first run if available
+            if shape.text_frame.paragraphs and shape.text_frame.paragraphs[0].runs:
+                first_run = shape.text_frame.paragraphs[0].runs[0]
+                font_info = {}
+                if first_run.font.name:
+                    font_info["name"] = first_run.font.name
+                if first_run.font.size:
+                    font_info["size"] = int(first_run.font.size / 12700)  # Convert to points
+                if first_run.font.bold is not None:
+                    font_info["bold"] = first_run.font.bold
+                if first_run.font.italic is not None:
+                    font_info["italic"] = first_run.font.italic
+                info["font"] = font_info
+
+        # Add placeholder information if applicable
+        if info["is_placeholder"]:
+            info["placeholder"] = {
+                "idx": shape.placeholder_format.idx,
+                "type": str(shape.placeholder_format.type)
+            }
+
+        return {
+            "success": True,
+            **info
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to get shape info: {str(e)}"
+        }
+
+
+def find_shapes_by_type(slide, shape_type: str) -> Dict:
+    """
+    Find all shapes of a specific type on a slide.
+
+    Args:
+        slide: The slide object
+        shape_type: Type of shape to find (e.g., "TEXT_BOX", "PICTURE", "TABLE", "CHART")
+
+    Returns:
+        Dictionary with matching shapes
+    """
+    try:
+        matches = []
+
+        for i, shape in enumerate(slide.shapes):
+            # Match by shape type name
+            if shape_type.upper() in str(shape.shape_type).upper():
+                matches.append({
+                    "shape_index": i,
+                    "name": shape.name,
+                    "type": str(shape.shape_type),
+                    "position": {
+                        "left": shape.left,
+                        "top": shape.top,
+                        "width": shape.width,
+                        "height": shape.height
+                    }
+                })
+
+        return {
+            "success": True,
+            "shape_type": shape_type,
+            "total_matches": len(matches),
+            "matches": matches
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to find shapes: {str(e)}"
+        }
+
+
+def get_all_textboxes(slide) -> Dict:
+    """
+    Get all text boxes from a slide.
+
+    Args:
+        slide: The slide object
+
+    Returns:
+        Dictionary with all text boxes and their content
+    """
+    try:
+        textboxes = []
+
+        for i, shape in enumerate(slide.shapes):
+            # Check if it's a textbox (has text_frame but is not a placeholder)
+            is_placeholder = False
+            try:
+                if hasattr(shape, 'placeholder_format') and shape.placeholder_format:
+                    is_placeholder = True
+            except:
+                # Some shapes throw errors when accessing placeholder_format
+                pass
+
+            if hasattr(shape, 'text_frame') and shape.text_frame and not is_placeholder:
+                text = shape.text_frame.text
+                textboxes.append({
+                    "shape_index": i,
+                    "name": shape.name,
+                    "text": text,
+                    "text_length": len(text),
+                    "position": {
+                        "left": shape.left,
+                        "top": shape.top,
+                        "width": shape.width,
+                        "height": shape.height
+                    }
+                })
+
+        return {
+            "success": True,
+            "total_textboxes": len(textboxes),
+            "textboxes": textboxes
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to get textboxes: {str(e)}"
+        }
 
 
 def extract_slide_text_content(slide) -> Dict:
